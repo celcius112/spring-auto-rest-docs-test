@@ -1,0 +1,84 @@
+buildscript {
+  ext {
+    springBootVersion = '2.0.4.RELEASE'
+  }
+  repositories {
+    jcenter()
+    mavenCentral()
+  }
+  dependencies {
+    classpath("org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}")
+    classpath "org.asciidoctor:asciidoctor-gradle-plugin:1.5.8"
+  }
+}
+
+apply plugin: 'java'
+apply plugin: 'eclipse'
+apply plugin: 'org.springframework.boot'
+apply plugin: 'io.spring.dependency-management'
+apply plugin: "org.asciidoctor.convert"
+
+group = 'com.example'
+version = '0.0.1-SNAPSHOT'
+sourceCompatibility = 1.8
+
+tasks.withType(JavaCompile) {
+  options.encoding = "UTF-8"
+}
+
+configurations {
+  jsondoclet
+}
+
+ext {
+  javadocJsonDir = file("$buildDir/generated-javadoc-json")
+}
+
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+  compile('org.springframework.boot:spring-boot-starter-web')
+  compileOnly('org.projectlombok:lombok')
+  testCompile('org.springframework.boot:spring-boot-starter-test')
+  testCompile('org.springframework.restdocs:spring-restdocs-mockmvc')
+  testCompile('capital.scalable:spring-auto-restdocs-core:2.0.1')
+  jsondoclet('capital.scalable:spring-auto-restdocs-json-doclet:2.0.1')
+}
+
+task jsonDoclet(type: Javadoc, dependsOn: compileJava) {
+  source = sourceSets.main.allJava
+  classpath = sourceSets.main.compileClasspath
+  destinationDir = javadocJsonDir
+  options.docletpath = configurations.jsondoclet.files.asType(List)
+  options.doclet = "capital.scalable.restdocs.jsondoclet.ExtractDocumentationAsJsonDoclet"
+  options.memberLevel = JavadocMemberLevel.PACKAGE
+}
+
+test {
+  systemProperty "org.springframework.restdocs.javadocJsonDir", javadocJsonDir
+
+  dependsOn jsonDoclet
+}
+
+asciidoctor {
+  sourceDir = file("src/main/asciidoc")
+  outputDir = file("$buildDir/generated-docs")
+  options backend: "html", doctype: "book"
+  //attributes "source-highlighter": "highlightjs", "snippets": snippetsDir
+
+  dependsOn test
+}
+
+asciidoctor.doLast {
+  copy {
+    from file("$buildDir/generated-docs/html5")
+    into file("$sourceSets.main.output.getClassesDir()/public")
+    include "index.html"
+  }
+}
+
+jar {
+  dependsOn asciidoctor
+}
